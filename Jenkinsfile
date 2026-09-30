@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "awsdevopsmdu/myapp"
+        IMAGE_NAME = "awsdevopsmdu/myapp:latest"
     }
 
     stages {
@@ -15,17 +15,13 @@ pipeline {
 
         stage('Docker Login') {
             steps {
-
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-creds',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
 
-                    sh '''
-                    echo $DOCKER_PASS | docker login \
-                    -u $DOCKER_USER --password-stdin
-                    '''
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                 }
             }
         }
@@ -33,6 +29,25 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 sh 'docker push $IMAGE_NAME'
+            }
+        }
+
+        stage('Deploy to ECS') {
+            steps {
+
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds']
+                ]) {
+
+                    sh '''
+                    aws ecs update-service \
+                    --cluster my-cluster \
+                    --service my-service \
+                    --force-new-deployment \
+                    --region us-east-2
+                    '''
+                }
             }
         }
     }
